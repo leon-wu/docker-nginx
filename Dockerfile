@@ -57,6 +57,7 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		--add-module=/usr/src/ngx_devel_kit-$DEVEL_KIT_MODULE_VERSION \
 		--add-module=/usr/src/lua-nginx-module-$LUA_MODULE_VERSION \
 		--add-module=/usr/src/set-misc-nginx-module-0.31 \
+		--add-module=/usr/src/ngx_http_proxy_connect_module-master \
 	" \
 	&& addgroup -S nginx \
 	&& adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G nginx nginx \
@@ -64,6 +65,7 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		gcc \
 		libc-dev \
 		make \
+		patch \
 		openssl-dev \
 		pcre-dev \
 		zlib-dev \
@@ -74,6 +76,7 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		gd-dev \
 		geoip-dev \
 		luajit-dev \
+	&& curl -fSL https://github.com/chobits/ngx_http_proxy_connect_module/archive/master.tar.gz -o ngx_http_proxy_connect.tar.gz \
 	&& curl -fSL https://github.com/simpl/ngx_devel_kit/archive/v$DEVEL_KIT_MODULE_VERSION.tar.gz -o ngx_devel_kit.tar.gz \
     && curl -fSL https://github.com/openresty/lua-nginx-module/archive/v$LUA_MODULE_VERSION.tar.gz -o lua-nginx-module.tar.gz \
 	&& curl -fSL https://github.com/openresty/set-misc-nginx-module/archive/v0.31.tar.gz -o set-misc-nginx-module.tar.gz \
@@ -94,12 +97,14 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 	gpg --batch --verify nginx.tar.gz.asc nginx.tar.gz \
 	&& rm -r "$GNUPGHOME" nginx.tar.gz.asc \
 	&& mkdir -p /usr/src \
+	&& tar -zxC /usr/src -f ngx_http_proxy_connect.tar.gz \
 	&& tar -zxC /usr/src -f ngx_devel_kit.tar.gz \
 	&& tar -zxC /usr/src -f lua-nginx-module.tar.gz \
 	&& tar -zxC /usr/src -f set-misc-nginx-module.tar.gz \
 	&& tar -zxC /usr/src -f nginx.tar.gz \
-	&& rm nginx.tar.gz ngx_devel_kit.tar.gz lua-nginx-module.tar.gz set-misc-nginx-module.tar.gz \
+	&& rm nginx.tar.gz ngx_devel_kit.tar.gz lua-nginx-module.tar.gz set-misc-nginx-module.tar.gz ngx_http_proxy_connect.tar.gz \
 	&& cd /usr/src/nginx-$NGINX_VERSION \
+	&& patch -p1 -i /usr/src/ngx_http_proxy_connect_module-master/proxy_connect.patch \
 	&& ./configure $CONFIG --with-debug \
 	&& make -j$(getconf _NPROCESSORS_ONLN) \
 	&& mv objs/nginx objs/nginx-debug \
