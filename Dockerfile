@@ -1,13 +1,14 @@
-FROM alpine:3.5
+FROM alpine:3.7
 
 LABEL maintainer="NGINX Docker Maintainers <docker-maint@nginx.com>"
 
-ENV NGINX_VERSION 1.12.2
+ENV NGINX_VERSION 1.14.0
+ENV LUA_MODULE_VERSION 0.10.13
+ENV SET_MISC_MODULE_VERSION 0.32
 ENV DEVEL_KIT_MODULE_VERSION 0.3.0
-ENV LUA_MODULE_VERSION 0.10.11
-
 ENV LUAJIT_LIB=/usr/lib
 ENV LUAJIT_INC=/usr/include/luajit-2.1
+
 
 RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 	&& CONFIG="\
@@ -56,8 +57,7 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		--with-http_v2_module \
 		--add-module=/usr/src/ngx_devel_kit-$DEVEL_KIT_MODULE_VERSION \
 		--add-module=/usr/src/lua-nginx-module-$LUA_MODULE_VERSION \
-		--add-module=/usr/src/set-misc-nginx-module-0.31 \
-		--add-module=/usr/src/ngx_http_proxy_connect_module-master \
+		--add-module=/usr/src/set-misc-nginx-module-$SET_MISC_MODULE_VERSION \
 	" \
 	&& addgroup -S nginx \
 	&& adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G nginx nginx \
@@ -65,7 +65,6 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		gcc \
 		libc-dev \
 		make \
-		patch \
 		openssl-dev \
 		pcre-dev \
 		zlib-dev \
@@ -75,13 +74,12 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		libxslt-dev \
 		gd-dev \
 		geoip-dev \
-		luajit-dev \
-	&& curl -fSL https://github.com/chobits/ngx_http_proxy_connect_module/archive/master.tar.gz -o ngx_http_proxy_connect.tar.gz \
+        luajit-dev \
 	&& curl -fSL https://github.com/simpl/ngx_devel_kit/archive/v$DEVEL_KIT_MODULE_VERSION.tar.gz -o ngx_devel_kit.tar.gz \
     && curl -fSL https://github.com/openresty/lua-nginx-module/archive/v$LUA_MODULE_VERSION.tar.gz -o lua-nginx-module.tar.gz \
-	&& curl -fSL https://github.com/openresty/set-misc-nginx-module/archive/v0.31.tar.gz -o set-misc-nginx-module.tar.gz \
-	&& curl -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz -o nginx.tar.gz \
-	&& curl -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz.asc -o nginx.tar.gz.asc \
+	&& curl -fSL https://github.com/openresty/set-misc-nginx-module/archive/v$SET_MISC_MODULE_VERSION.tar.gz -o set-misc-nginx-module.tar.gz \
+	&& curl -fSL https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz -o nginx.tar.gz \
+	&& curl -fSL https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz.asc  -o nginx.tar.gz.asc \
 	&& export GNUPGHOME="$(mktemp -d)" \
 	&& found=''; \
 	for server in \
@@ -95,16 +93,14 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 	done; \
 	test -z "$found" && echo >&2 "error: failed to fetch GPG key $GPG_KEYS" && exit 1; \
 	gpg --batch --verify nginx.tar.gz.asc nginx.tar.gz \
-	&& rm -r "$GNUPGHOME" nginx.tar.gz.asc \
+	&& rm -rf "$GNUPGHOME" nginx.tar.gz.asc \
 	&& mkdir -p /usr/src \
-	&& tar -zxC /usr/src -f ngx_http_proxy_connect.tar.gz \
 	&& tar -zxC /usr/src -f ngx_devel_kit.tar.gz \
 	&& tar -zxC /usr/src -f lua-nginx-module.tar.gz \
 	&& tar -zxC /usr/src -f set-misc-nginx-module.tar.gz \
 	&& tar -zxC /usr/src -f nginx.tar.gz \
-	&& rm nginx.tar.gz ngx_devel_kit.tar.gz lua-nginx-module.tar.gz set-misc-nginx-module.tar.gz ngx_http_proxy_connect.tar.gz \
+	&& rm nginx.tar.gz ngx_devel_kit.tar.gz lua-nginx-module.tar.gz set-misc-nginx-module.tar.gz \
 	&& cd /usr/src/nginx-$NGINX_VERSION \
-	&& patch -p1 -i /usr/src/ngx_http_proxy_connect_module-master/proxy_connect.patch \
 	&& ./configure $CONFIG --with-debug \
 	&& make -j$(getconf _NPROCESSORS_ONLN) \
 	&& mv objs/nginx objs/nginx-debug \
@@ -147,6 +143,10 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 	&& apk del .build-deps \
 	&& apk del .gettext \
 	&& mv /tmp/envsubst /usr/local/bin/ \
+	\
+	# Bring in tzdata so users could set the timezones through the environment
+	# variables
+	&& apk add --no-cache tzdata \
 	\
 	# forward request and error logs to docker log collector
 	&& ln -sf /dev/stdout /var/log/nginx/access.log \
